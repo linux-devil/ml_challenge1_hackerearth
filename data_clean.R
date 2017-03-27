@@ -78,3 +78,83 @@ test[,new_var_4 := sqrt(loan_amnt * int_rate)]
 
 write.csv(train,"train_mod.csv",row.names=FALSE)
 write.csv(test,"test_mod.csv",row.names=FALSE)
+
+
+
+train[,c("emp_title","zip_code","addr_state") := NULL]
+write.csv(train,"train_mod.csv",row.names=FALSE)
+write.csv(test,"test_mod.csv",row.names=FALSE)
+
+
+cat_cols = ['grade', 'sub_grade', 'emp_length', 'home_ownership', 'verification_status', 'purpose', 'initial_list_status']
+'''
+one hot encoding around :
+initial_list_status
+purpose
+verification_status
+home_ownership
+grade
+sub_grade
+'''
+
+import numpy as np
+import pandas as pd
+data = pd.read_csv('train_mod.csv')
+data = data.drop('loan_status', axis=1)
+data = data.fillna("0")
+test_data = pd.read_csv('test_mod.csv')
+test_data = test_data.fillna("0")
+num_train = np.shape(data)[0]
+data = pd.concat([data,test_data],ignore_index=True)
+data = data.fillna("0")
+data['last_week_pay'] = data['last_week_pay'].str.extract('(\d+)')
+data = data.fillna("0")
+data['last_week_pay'] = data['last_week_pay'].astype(int)
+#data['term'] = data['term'].str.extract('(\d+)')
+data = data.fillna("0")
+data['term'] = data['term'].astype(int)
+
+from sklearn.preprocessing import LabelEncoder
+le = {}
+
+for col in cat_cols:
+    le[col] = LabelEncoder()
+    data[col] = le[col].fit_transform(data[col])
+    le[col].classes_ = np.append(le[col].classes_, 'other')
+    print('Encoded: ', col)
+
+one_hot = pd.get_dummies(data['initial_list_status'])
+data = data.drop('initial_list_status', axis=1)
+data = data.join(one_hot)
+one_hot = pd.get_dummies(data['purpose'])
+data = data.drop('purpose', axis=1)
+data = data.join(one_hot,lsuffix="_purpose")
+one_hot = pd.get_dummies(data['verification_status'])
+data = data.drop('verification_status', axis=1)
+data = data.join(one_hot,lsuffix="_verification_status")
+one_hot = pd.get_dummies(data['home_ownership'])
+data = data.drop('home_ownership', axis=1)
+data = data.join(one_hot,lsuffix="_home_ownership")
+one_hot = pd.get_dummies(data['grade'])
+data = data.drop('grade', axis=1)
+data = data.join(one_hot,lsuffix="_grade")
+one_hot = pd.get_dummies(data['sub_grade'])
+data = data.drop('sub_grade', axis=1)
+data = data.join(one_hot,lsuffix="_sub_grade")
+data = data.fillna("0")
+data = data.drop('member_id',axis=1)
+
+X = data[:num_train]
+X_test = data[num_train:]
+
+pq = pd.read_csv('train_mod.csv')
+label = pq['loan_status']
+
+from sklearn.ensemble import RandomForestClassifier
+
+rf = RandomForestClassifier(n_estimators=100, verbose=5, n_jobs=-1)
+rf.fit(X,label)
+preds = rf.predict_proba(X_test)
+
+data_test = pd.read_csv("test_mod.csv")
+rows = data_test['member_id'].copy()
